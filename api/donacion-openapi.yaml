@@ -1,0 +1,989 @@
+openapi: 3.1.0
+
+info:
+  title: RedVital - Servicio de Donación
+  version: 1.0.0
+  description: >
+    Contrato OpenAPI del Servicio de Donación para el incremento
+    funcional del Sprint 3. Incluye búsqueda de donante, registro
+    de donación, tamizaje, inventario, despacho, disposición final
+    y trazabilidad de unidades.
+
+tags:
+  - name: Donantes
+    description: Operaciones relacionadas con la identificación del donante.
+  - name: Donaciones
+    description: Registro de donaciones.
+  - name: Unidades
+    description: Operaciones sobre el ciclo de vida de las unidades.
+  - name: Inventario
+    description: Consulta de existencias.
+  - name: Trazabilidad
+    description: Consulta del historial de una unidad.
+
+paths:
+
+  /v1/donantes/busqueda:
+    post:
+      tags:
+        - Donantes
+      summary: Buscar donante
+      description: >
+        Identifica al donante presente a partir de su documento.
+
+        El documento se transporta exclusivamente en el cuerpo de
+        la petición y nunca en la URL, para evitar que quede expuesto
+        en registros de acceso.
+
+        Operación disponible para U3 - Operador de banco.
+      operationId: buscarDonante
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusquedaDonanteRequest"
+
+      responses:
+        "200":
+          description: Donante encontrado.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusquedaDonanteResponse"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/donaciones:
+    post:
+      tags:
+        - Donaciones
+      summary: Registrar donación
+      description: >
+        Registra una donación y crea una unidad por cada componente
+        declarado, inicialmente en estado captada.
+
+        La creación de la donación y de sus unidades ocurre en una
+        sola transacción.
+
+        La institución se obtiene de la jurisdicción del token del
+        operador y nunca del cuerpo de la petición.
+
+        Puede vincularse un donante registrado, una intención de
+        donación o ninguno de los dos. donante_id e intencion_id
+        no deben coexistir.
+
+        Si se proporciona una campaña y el Servicio de Campañas no
+        puede confirmarla, la donación continúa registrándose con
+        campania_id nulo. No se asigna una campaña por defecto.
+
+        Operación disponible para U3 - Operador de banco.
+      operationId: registrarDonacion
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/CorrelacionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistroDonacionRequest"
+
+      responses:
+        "201":
+          description: Donación registrada correctamente.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistroDonacionResponse"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "409":
+          $ref: "#/components/responses/ConflictoDeEstado"
+
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+
+        "422":
+          $ref: "#/components/responses/ReglaDeNegocio"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/unidades/{id}/ingreso-tamizaje:
+    post:
+      tags:
+        - Unidades
+      summary: Iniciar tamizaje
+      description: >
+        Registra la transición de la unidad desde fraccionada hacia
+        en_tamizaje.
+
+        Corresponde a la transición 2 de la máquina de estados.
+
+        Operación disponible para U3 - Operador de banco.
+      operationId: iniciarTamizaje
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/UnidadId"
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransicionConObservacionRequest"
+
+      responses:
+        "200":
+          description: Unidad ingresada a tamizaje.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "409":
+          $ref: "#/components/responses/ConflictoDeEstado"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/unidades/{id}/tamizaje:
+    post:
+      tags:
+        - Unidades
+      summary: Registrar resultado de tamizaje
+      description: >
+        Registra exclusivamente el veredicto de aptitud de la unidad.
+
+        El cuerpo contiene exactamente un campo booleano denominado
+        apta. No se admite ninguna propiedad adicional ni texto libre.
+
+        Si apta=true, la unidad pasa de en_tamizaje a disponible.
+        Si apta=false, pasa de en_tamizaje a no_apta.
+
+        Corresponde a las transiciones 3 y 4.
+
+        Operación disponible para U3 - Operador de banco.
+      operationId: registrarTamizaje
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/UnidadId"
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TamizajeRequest"
+
+      responses:
+        "200":
+          description: Veredicto registrado correctamente.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "409":
+          $ref: "#/components/responses/ConflictoDeEstado"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/inventario:
+    get:
+      tags:
+        - Inventario
+      summary: Consultar existencias
+      description: >
+        Consulta la proyección de inventario construida sobre las
+        unidades.
+
+        Solo se contabilizan estados cuyo atributo cuenta_disponible
+        sea verdadero.
+
+        El resultado se filtra por la jurisdicción del usuario.
+
+        Operación disponible para U3, U4, U5 y U6.
+      operationId: consultarInventario
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      responses:
+        "200":
+          description: Existencias visibles para la jurisdicción del usuario.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventarioResponse"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+        "503":
+          $ref: "#/components/responses/ServicioNoDisponible"
+
+
+  /v1/unidades/{id}/despacho:
+    post:
+      tags:
+        - Unidades
+      summary: Despachar unidad
+      description: >
+        Registra el despacho de una unidad para transfusión.
+
+        La operación solo puede ejecutarse desde la institución que
+        mantiene la custodia de la unidad.
+
+        Requiere confirmación explícita del identificador del recurso.
+
+        Corresponde a la transición 7:
+        reservada -> despachada.
+
+        Operación disponible para U3 - Operador de banco.
+      operationId: despacharUnidad
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/UnidadId"
+        - $ref: "#/components/parameters/CorrelacionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccionIrreversibleRequest"
+
+      responses:
+        "200":
+          description: Unidad despachada correctamente.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "409":
+          $ref: "#/components/responses/ConflictoDeEstado"
+
+        "422":
+          $ref: "#/components/responses/ReglaDeNegocio"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/unidades/{id}/disposicion-final:
+    post:
+      tags:
+        - Unidades
+      summary: Registrar disposición final
+      description: >
+        Registra la disposición final de una unidad.
+
+        Requiere confirmación explícita del identificador del recurso.
+
+        Admite las transiciones:
+        no_apta -> desechada
+        y
+        vencida -> desechada.
+
+        Corresponde a las transiciones 12 y 13.
+
+        Operación disponible para U3 - Operador de banco.
+      operationId: registrarDisposicionFinal
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/UnidadId"
+        - $ref: "#/components/parameters/CorrelacionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccionIrreversibleRequest"
+
+      responses:
+        "200":
+          description: Disposición final registrada correctamente.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "409":
+          $ref: "#/components/responses/ConflictoDeEstado"
+
+        "422":
+          $ref: "#/components/responses/ReglaDeNegocio"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/unidades/{id}/eventos:
+    get:
+      tags:
+        - Trazabilidad
+      summary: Consultar eventos de una unidad
+      description: >
+        Devuelve el historial completo y de solo lectura de una unidad.
+
+        Incluye actor, marca temporal, estados y observación de catálogo.
+        No admite texto libre de observación.
+
+        Operación disponible para U3, U4, U5, U6 y U7.
+      operationId: consultarEventosUnidad
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/UnidadId"
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      responses:
+        "200":
+          description: Historial de la unidad.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventosUnidadResponse"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+components:
+
+  securitySchemes:
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token de acceso emitido por el Servicio de Identidad.
+        Debe ser validado nuevamente por el Servicio de Donación.
+
+
+  parameters:
+
+    CorrelacionId:
+      name: X-Correlacion-Id
+      in: header
+      required: false
+      description: >
+        Identificador de correlación. Si el cliente no lo proporciona,
+        el gateway lo genera.
+      schema:
+        type: string
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >
+        Identifica una operación idempotente. Un reenvío con la misma
+        clave devuelve el resultado original y no crea un duplicado.
+      schema:
+        type: string
+
+    UnidadId:
+      name: id
+      in: path
+      required: true
+      description: Identificador universal de la unidad.
+      schema:
+        type: string
+        format: uuid
+
+
+  headers:
+
+    CorrelacionId:
+      description: Identificador de correlación de la operación.
+      schema:
+        type: string
+
+
+  schemas:
+
+    BusquedaDonanteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - documento
+      properties:
+        documento:
+          type: string
+          writeOnly: true
+          description: >
+            Documento presentado para identificar al donante.
+            Nunca se transporta en la URL ni se almacena en claro.
+
+
+    BusquedaDonanteResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - nombre
+        - elegibilidad
+      properties:
+        id:
+          type: string
+          format: uuid
+
+        nombre:
+          type: string
+          maxLength: 120
+
+        elegibilidad:
+          description: >
+            Resultado de elegibilidad devuelto por el Servicio de Donación.
+            El DD establece que la búsqueda devuelve identificador,
+            nombre y elegibilidad, pero no fija aquí una estructura
+            interna adicional para este campo.
+
+
+    RegistroDonacionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - tipo_donacion_id
+        - componentes
+      properties:
+
+        donante_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: >
+            Donante registrado. No puede coexistir con intencion_id.
+
+        intencion_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: >
+            Intención que origina la donación, si existe.
+            No puede coexistir con donante_id.
+
+        tipo_donacion_id:
+          type: string
+          format: uuid
+
+        campania_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: >
+            Campaña asociada. Si no puede confirmarse por indisponibilidad
+            del Servicio de Campañas, la donación se registra con este
+            valor nulo.
+
+        componentes:
+          type: array
+          minItems: 1
+          description: >
+            Componentes declarados para los que se creará una unidad
+            en estado captada.
+          items:
+            type: string
+            format: uuid
+
+      allOf:
+        - not:
+            required:
+              - donante_id
+              - intencion_id
+
+
+    RegistroDonacionResponse:
+      type: object
+      additionalProperties: true
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador de la donación.
+
+        campania_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+
+        unidades:
+          type: array
+          description: >
+            Unidades creadas con la donación. El DD establece que se
+            crea una unidad por componente, pero no fija en esta operación
+            el schema completo de respuesta.
+          items:
+            type: object
+            additionalProperties: true
+
+
+    TransicionConObservacionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        observacion_codigo:
+          type: string
+          description: >
+            Código perteneciente al catálogo observacion_operativa.
+            No se admite texto libre.
+
+
+    TamizajeRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - apta
+      properties:
+        apta:
+          type: boolean
+          description: >
+            Único dato permitido del resultado del tamizaje.
+            No se acepta causa, diagnóstico, motivo ni otra propiedad.
+
+
+    AccionIrreversibleRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - confirmacion
+      properties:
+
+        confirmacion:
+          type: string
+          format: uuid
+          description: >
+            Debe coincidir con el identificador de la unidad afectada.
+            Un valor distinto se rechaza con 422.
+
+        observacion_codigo:
+          type: string
+          description: >
+            Código opcional del catálogo observacion_operativa.
+            No se admite texto libre.
+
+
+    InventarioResponse:
+      type: object
+      additionalProperties: true
+      description: >
+        Proyección de existencias sobre unidad, filtrada por
+        cuenta_disponible y jurisdicción.
+
+        El DD V2.0 no fija en la definición de esta operación una
+        estructura exacta de campos de respuesta; por ello este contrato
+        no inventa una forma adicional.
+
+
+    EventosUnidadResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/EventoUnidad"
+
+
+    EventoUnidad:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - unidad_id
+        - estado_nuevo_id
+        - actor_tipo
+        - institucion_id
+        - correlacion_id
+        - ocurrido_en
+      properties:
+
+        id:
+          type: string
+          format: uuid
+
+        unidad_id:
+          type: string
+          format: uuid
+
+        estado_anterior_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Nulo únicamente para el evento de creación.
+
+        estado_nuevo_id:
+          type: string
+          format: uuid
+
+        actor_tipo:
+          type: string
+          enum:
+            - usuario
+            - sistema
+
+        actor_id:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+          description: >
+            Identificador del usuario o nombre del proceso cuando
+            actor_tipo es sistema.
+
+        institucion_id:
+          type: string
+          format: uuid
+
+        observacion_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: >
+            Referencia al catálogo observacion_operativa.
+            No existe observación de texto libre.
+
+        correlacion_id:
+          type: string
+          maxLength: 36
+
+        ocurrido_en:
+          type: string
+          format: date-time
+
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+      required:
+        - tipo
+        - titulo
+        - estado
+        - detalle
+        - correlacion_id
+      properties:
+
+        tipo:
+          type: string
+
+        titulo:
+          type: string
+
+        estado:
+          type: integer
+          minimum: 400
+          maximum: 599
+
+        detalle:
+          type: string
+          description: >
+            No contiene datos personales, datos clínicos,
+            credenciales ni contenido sensible del recurso.
+
+        correlacion_id:
+          type: string
+
+
+  responses:
+
+    PeticionInvalida:
+      description: Petición inválida.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: peticion-invalida
+            titulo: Petición inválida
+            estado: 400
+            detalle: La petición no cumple el esquema esperado.
+            correlacion_id: corr-123
+
+
+    SesionInvalida:
+      description: Token ausente o inválido.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: sesion-invalida
+            titulo: Sesión inválida
+            estado: 401
+            detalle: No fue posible validar la sesión.
+            correlacion_id: corr-123
+
+
+    OperacionNoPermitida:
+      description: El rol no está autorizado para ejecutar la operación.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: operacion-no-permitida
+            titulo: Operación no permitida
+            estado: 403
+            detalle: La operación no está permitida.
+            correlacion_id: corr-123
+
+
+    NoEncontrado:
+      description: >
+        El recurso no existe dentro del alcance del usuario.
+        La respuesta no permite distinguir si existe fuera
+        de su jurisdicción.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: no-encontrado
+            titulo: Recurso no encontrado
+            estado: 404
+            detalle: No se encontró el recurso solicitado.
+            correlacion_id: corr-123
+
+
+    ConflictoDeEstado:
+      description: El estado actual del recurso no permite la operación.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: conflicto-de-estado
+            titulo: Conflicto de estado
+            estado: 409
+            detalle: El estado actual no permite realizar la operación.
+            correlacion_id: corr-123
+
+
+    ReglaDeNegocio:
+      description: La operación viola una regla del dominio.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: regla-de-negocio
+            titulo: Regla de negocio
+            estado: 422
+            detalle: La operación no cumple una regla del dominio.
+            correlacion_id: corr-123
+
+
+    DemasiadasPeticiones:
+      description: Se superó el límite de peticiones permitido.
+      headers:
+        Retry-After:
+          description: Tiempo antes de reintentar.
+          schema:
+            type: integer
+            minimum: 0
+
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: demasiadas-peticiones
+            titulo: Demasiadas peticiones
+            estado: 429
+            detalle: Se superó el límite de peticiones permitido.
+            correlacion_id: corr-123
+
+
+    ServicioNoDisponible:
+      description: >
+        Una dependencia necesaria para completar la operación
+        no se encuentra disponible.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: servicio-no-disponible
+            titulo: Servicio no disponible
+            estado: 503
+            detalle: Una dependencia requerida no se encuentra disponible.
+            correlacion_id: corr-123
+
+
+    CuerpoDemasiadoGrande:
+      description: >
+        El cuerpo supera el límite de 1 MiB. La respuesta es
+        producida por el proxy de borde antes de llegar al gateway.

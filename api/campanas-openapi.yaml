@@ -1,0 +1,541 @@
+openapi: 3.1.0
+
+info:
+  title: RedVital - Servicio de Campañas
+  version: 1.0.0
+  description: >
+    Contrato OpenAPI del Servicio de Campañas para el incremento
+    funcional del Sprint 3. Incluye consulta de campañas visibles,
+    detalle, publicación y cierre.
+
+tags:
+  - name: Campañas
+    description: Consulta y administración del ciclo de vida de campañas.
+
+paths:
+
+  /v1/campanias:
+    get:
+      tags:
+        - Campañas
+      summary: Consultar campañas visibles
+      description: >
+        Devuelve las campañas visibles para el solicitante.
+
+        Sin token o con rol donante, únicamente se muestran campañas
+        en estado publicada, filtradas por el municipio o departamento
+        seleccionado.
+
+        Con un rol institucional U3, U4, U5 o U6, se muestran las
+        campañas que pertenecen a su jurisdicción, en los estados
+        permitidos por el contrato.
+
+        La respuesta expone el cupo disponible y nunca el número
+        interno de reservas.
+      operationId: consultarCampanias
+
+      security:
+        - {}
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/CorrelacionId"
+
+        - name: estado
+          in: query
+          required: false
+          description: >
+            Filtro utilizado por consumidores autorizados.
+            El proceso de Donación utiliza publicada.
+          schema:
+            $ref: "#/components/schemas/EstadoCampania"
+
+        - name: publicada_desde
+          in: query
+          required: false
+          description: >
+            Marca temporal utilizada por el proceso de Donación
+            para consultar campañas publicadas recientemente.
+          schema:
+            type: string
+            format: date-time
+
+      responses:
+        "200":
+          description: Campañas visibles para el solicitante.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CampaniaResponse"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/campanias/{id}:
+    get:
+      tags:
+        - Campañas
+      summary: Consultar detalle de campaña
+      description: >
+        Devuelve el detalle de una campaña.
+
+        Esta operación no es pública. El listado público ya entrega
+        los datos visibles de las campañas publicadas.
+
+        Para un donante solo son visibles campañas publicadas o cerradas.
+        Para los roles institucionales se aplica el filtro de jurisdicción.
+
+        La operación también puede ser consumida por el Servicio
+        de Donación al confirmar una campaña asociada a una donación.
+      operationId: consultarCampania
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/CampaniaId"
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      responses:
+        "200":
+          description: Detalle de campaña.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaniaResponse"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/campanias/{id}/publicacion:
+    post:
+      tags:
+        - Campañas
+      summary: Publicar campaña
+      description: >
+        Publica una campaña.
+
+        Operación disponible para U4 - Administrador de banco.
+
+        La publicación es una acción auditada. A partir de este
+        momento la campaña pasa a ser visible para donantes y público,
+        y el Servicio de Donación puede detectarla para generar
+        avisos de campaña publicada.
+      operationId: publicarCampania
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/CampaniaId"
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      responses:
+        "200":
+          description: Campaña publicada correctamente.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaniaResponse"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "409":
+          $ref: "#/components/responses/ConflictoDeEstado"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/campanias/{id}/cierre:
+    post:
+      tags:
+        - Campañas
+      summary: Cerrar campaña
+      description: >
+        Cierra una campaña.
+
+        Operación disponible para U4 - Administrador de banco.
+
+        El cierre queda registrado en la serie de auditoría
+        del Servicio de Campañas.
+      operationId: cerrarCampania
+
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/CampaniaId"
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      responses:
+        "200":
+          description: Campaña cerrada correctamente.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaniaResponse"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+
+        "409":
+          $ref: "#/components/responses/ConflictoDeEstado"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+components:
+
+  securitySchemes:
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token de acceso emitido por el Servicio de Identidad.
+        El Servicio de Campañas vuelve a validar el token antes
+        de aplicar las reglas de autorización y jurisdicción.
+
+
+  parameters:
+
+    CorrelacionId:
+      name: X-Correlacion-Id
+      in: header
+      required: false
+      description: >
+        Identificador de correlación. Si el cliente no lo proporciona,
+        el gateway lo genera.
+      schema:
+        type: string
+
+    CampaniaId:
+      name: id
+      in: path
+      required: true
+      description: Identificador universal de la campaña.
+      schema:
+        type: string
+        format: uuid
+
+
+  headers:
+
+    CorrelacionId:
+      description: Identificador de correlación asociado a la petición.
+      schema:
+        type: string
+
+
+  schemas:
+
+    EstadoCampania:
+      type: string
+      enum:
+        - borrador
+        - publicada
+        - cerrada
+        - cancelada
+
+
+    CampaniaResponse:
+      type: object
+      additionalProperties: false
+
+      required:
+        - id
+        - institucion_id
+        - territorio_codigo
+        - territorio_ruta
+        - nombre
+        - sede
+        - inicia_en
+        - termina_en
+        - estado
+        - cupo_disponible
+
+      properties:
+
+        id:
+          type: string
+          format: uuid
+
+        institucion_id:
+          type: string
+          format: uuid
+          description: Institución organizadora de la campaña.
+
+        territorio_codigo:
+          type: string
+          maxLength: 5
+          description: Código DIVIPOLA del municipio de la sede.
+
+        territorio_ruta:
+          type: string
+          maxLength: 32
+          description: >
+            Ruta territorial utilizada para filtrar campañas
+            por jurisdicción.
+
+        nombre:
+          type: string
+          maxLength: 160
+
+        descripcion:
+          type:
+            - string
+            - "null"
+          maxLength: 500
+
+        sede:
+          type: string
+          maxLength: 200
+          description: Lugar físico de realización de la campaña.
+
+        inicia_en:
+          type: string
+          format: date-time
+
+        termina_en:
+          type: string
+          format: date-time
+          description: Debe ser posterior a inicia_en.
+
+        cupo_total:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          description: >
+            Cupo máximo de la campaña. Nulo significa que
+            la campaña no tiene un cupo limitado.
+
+        cupo_disponible:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          description: >
+            Cupo que todavía puede utilizarse. La API expone
+            este valor en lugar de revelar cupo_reservado.
+            Es nulo cuando cupo_total es nulo.
+
+        estado:
+          $ref: "#/components/schemas/EstadoCampania"
+
+        publicada_en:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: >
+            Momento en que la campaña fue publicada.
+            Es utilizado por Donación para detectar campañas
+            publicadas recientemente.
+
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+
+      required:
+        - tipo
+        - titulo
+        - estado
+        - detalle
+        - correlacion_id
+
+      properties:
+
+        tipo:
+          type: string
+
+        titulo:
+          type: string
+
+        estado:
+          type: integer
+          minimum: 400
+          maximum: 599
+
+        detalle:
+          type: string
+          description: >
+            No contiene datos personales, clínicos ni contenido
+            sensible del recurso solicitado.
+
+        correlacion_id:
+          type: string
+
+
+  responses:
+
+    PeticionInvalida:
+      description: Petición inválida.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: peticion-invalida
+            titulo: Petición inválida
+            estado: 400
+            detalle: La petición no cumple el esquema esperado.
+            correlacion_id: corr-123
+
+
+    SesionInvalida:
+      description: Token ausente o inválido.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: sesion-invalida
+            titulo: Sesión inválida
+            estado: 401
+            detalle: No fue posible validar la sesión.
+            correlacion_id: corr-123
+
+
+    OperacionNoPermitida:
+      description: >
+        El rol o tipo de sujeto no está autorizado para ejecutar
+        la operación.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: operacion-no-permitida
+            titulo: Operación no permitida
+            estado: 403
+            detalle: La operación no está permitida.
+            correlacion_id: corr-123
+
+
+    NoEncontrado:
+      description: >
+        La campaña no existe dentro del alcance visible para
+        el solicitante.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: no-encontrado
+            titulo: Recurso no encontrado
+            estado: 404
+            detalle: No se encontró el recurso solicitado.
+            correlacion_id: corr-123
+
+
+    ConflictoDeEstado:
+      description: >
+        El estado actual de la campaña no permite ejecutar
+        la operación solicitada.
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: conflicto-de-estado
+            titulo: Conflicto de estado
+            estado: 409
+            detalle: El estado actual no permite realizar la operación.
+            correlacion_id: corr-123
+
+
+    DemasiadasPeticiones:
+      description: Se superó el límite de peticiones permitido.
+      headers:
+        Retry-After:
+          description: Tiempo antes de reintentar.
+          schema:
+            type: integer
+            minimum: 0
+
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            tipo: demasiadas-peticiones
+            titulo: Demasiadas peticiones
+            estado: 429
+            detalle: Se superó el límite de peticiones permitido.
+            correlacion_id: corr-123

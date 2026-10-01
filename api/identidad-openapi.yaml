@@ -1,0 +1,492 @@
+openapi: 3.1.0
+
+info:
+  title: RedVital - Servicio de Identidad
+  version: 1.0.0
+  description: >
+    Contrato OpenAPI del Servicio de Identidad para el incremento del Sprint 3.
+    Define inicio de sesión, renovación, cierre de sesión y publicación
+    de claves públicas conforme al SRS V3.0, SAD V2.0, DD V2.0 y ADR-008.
+
+tags:
+  - name: Sesiones
+    description: Inicio, renovación y cierre de sesiones.
+  - name: Claves públicas
+    description: Publicación de claves públicas para validación distribuida.
+
+paths:
+
+  /v1/sesiones:
+    post:
+      tags:
+        - Sesiones
+      summary: Iniciar sesión
+      description: >
+        Autentica a un usuario registrado mediante correo y credencial.
+        Si las credenciales son válidas, crea una sesión de renovación,
+        emite un token de acceso con vigencia de quince minutos y establece
+        la cookie segura de renovación.
+
+        La respuesta ante un correo inexistente y una credencial incorrecta
+        es indistinguible.
+      operationId: iniciarSesion
+      security: []
+
+      parameters:
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InicioSesionRequest"
+
+      responses:
+        "200":
+          description: Sesión iniciada correctamente.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+            Set-Cookie:
+              description: >
+                Cookie redvital_renovacion con HttpOnly, Secure,
+                SameSite=Strict y Path=/api/v1/sesiones.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenAccesoResponse"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/sesiones/renovacion:
+    post:
+      tags:
+        - Sesiones
+      summary: Renovar sesión
+      description: >
+        Utiliza la cookie redvital_renovacion para verificar la sesión
+        y emitir un nuevo token de acceso.
+
+        Cada renovación válida rota el secreto de renovación. La sesión
+        conserva una vigencia absoluta máxima de ocho horas y la renovación
+        no extiende ese límite.
+
+        La reutilización de un secreto previamente rotado provoca la
+        revocación de la sesión.
+      operationId: renovarSesion
+
+      security:
+        - cookieRenovacion: []
+
+      parameters:
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      responses:
+        "200":
+          description: Sesión renovada correctamente.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+            Set-Cookie:
+              description: >
+                Nueva cookie redvital_renovacion después de rotar
+                el secreto de renovación.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenAccesoResponse"
+
+        "400":
+          $ref: "#/components/responses/PeticionInvalida"
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /v1/sesiones/actual:
+    delete:
+      tags:
+        - Sesiones
+      summary: Cerrar sesión actual
+      description: >
+        Revoca la sesión de renovación actual.
+
+        El token de acceso emitido previamente no mantiene estado central
+        y continúa siendo válido hasta alcanzar su expiración, con una
+        vigencia máxima de quince minutos desde su emisión.
+      operationId: cerrarSesion
+
+      security:
+        - bearerAuth: []
+          cookieRenovacion: []
+
+      parameters:
+        - $ref: "#/components/parameters/CorrelacionId"
+
+      responses:
+        "204":
+          description: Sesión revocada correctamente.
+          headers:
+            X-Correlacion-Id:
+              $ref: "#/components/headers/CorrelacionId"
+            Set-Cookie:
+              description: >
+                Invalida la cookie redvital_renovacion en el cliente.
+              schema:
+                type: string
+
+        "401":
+          $ref: "#/components/responses/SesionInvalida"
+
+        "403":
+          $ref: "#/components/responses/OperacionNoPermitida"
+
+        "429":
+          $ref: "#/components/responses/DemasiadasPeticiones"
+
+
+  /.well-known/jwks.json:
+    get:
+      tags:
+        - Claves públicas
+      summary: Obtener claves públicas
+      description: >
+        Publica las claves públicas vigentes utilizadas para validar
+        los tokens emitidos por el Servicio de Identidad.
+
+        La respuesta cumple RFC 7517 y contiene únicamente material público.
+
+        Los consumidores mantienen las claves en caché durante diez minutos.
+        Ante un kid desconocido pueden volver a consultar como máximo una
+        vez cada treinta segundos.
+
+        Si no existe una clave válida para verificar un token, el consumidor
+        rechaza las operaciones que requieren sesión. El comportamiento es
+        de fallo cerrado.
+
+        Esta operación no se enruta por el API Gateway.
+      operationId: obtenerClavesPublicas
+
+      security: []
+
+      responses:
+        "200":
+          description: Conjunto de claves públicas vigente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JwksResponse"
+
+
+components:
+
+  securitySchemes:
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token de acceso emitido exclusivamente por el Servicio de Identidad.
+        Firmado mediante RS256 con claves RSA de 3072 bits identificadas
+        mediante kid. Su vigencia es de quince minutos.
+
+    cookieRenovacion:
+      type: apiKey
+      in: cookie
+      name: redvital_renovacion
+      description: >
+        Token opaco y rotatorio de renovación. La cookie se configura con
+        HttpOnly, Secure, SameSite=Strict y Path=/api/v1/sesiones.
+        La sesión tiene una vigencia absoluta máxima de ocho horas.
+
+
+  parameters:
+
+    CorrelacionId:
+      name: X-Correlacion-Id
+      in: header
+      required: false
+      description: >
+        Identificador utilizado para correlacionar la petición entre
+        los componentes del sistema. Si el cliente no lo proporciona,
+        el gateway lo genera.
+      schema:
+        type: string
+
+
+  headers:
+
+    CorrelacionId:
+      description: Identificador de correlación asociado a la petición.
+      schema:
+        type: string
+
+
+  schemas:
+
+    InicioSesionRequest:
+      type: object
+      additionalProperties: false
+
+      required:
+        - correo
+        - credencial
+
+      properties:
+
+        correo:
+          type: string
+          format: email
+          maxLength: 160
+          description: >
+            Correo registrado utilizado como identificador de acceso.
+
+        credencial:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: >
+            Credencial presentada por el usuario. Nunca se almacena,
+            registra ni devuelve en claro.
+
+
+    TokenAccesoResponse:
+      type: object
+      additionalProperties: false
+
+      required:
+        - token_acceso
+        - tipo
+        - expira_en
+
+      properties:
+
+        token_acceso:
+          type: string
+          description: >
+            JWT firmado mediante RS256. Contiene exactamente las
+            reivindicaciones sub, role, jurisdiction, iss, aud,
+            iat, exp y jti.
+
+        tipo:
+          type: string
+          const: Bearer
+
+        expira_en:
+          type: integer
+          const: 900
+          description: Vigencia del token de acceso expresada en segundos.
+
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+
+      required:
+        - tipo
+        - titulo
+        - estado
+        - detalle
+        - correlacion_id
+
+      properties:
+
+        tipo:
+          type: string
+          description: Tipo de error definido por el catálogo común.
+
+        titulo:
+          type: string
+          description: Descripción breve del error.
+
+        estado:
+          type: integer
+          minimum: 400
+          maximum: 599
+
+        detalle:
+          type: string
+          description: >
+            Descripción del error. No contiene datos personales,
+            datos clínicos, credenciales ni contenido sensible
+            del recurso solicitado.
+
+        correlacion_id:
+          type: string
+          description: Identificador de correlación de la operación.
+
+
+    JwksResponse:
+      type: object
+      additionalProperties: false
+
+      required:
+        - keys
+
+      properties:
+
+        keys:
+          type: array
+          description: Claves públicas disponibles para validar tokens.
+          items:
+            $ref: "#/components/schemas/Jwk"
+
+
+    Jwk:
+      type: object
+      additionalProperties: true
+
+      required:
+        - kty
+        - kid
+        - use
+        - alg
+        - n
+        - e
+
+      properties:
+
+        kty:
+          type: string
+          const: RSA
+
+        kid:
+          type: string
+          description: Identificador de la clave.
+
+        use:
+          type: string
+          const: sig
+
+        alg:
+          type: string
+          const: RS256
+
+        n:
+          type: string
+          description: Módulo RSA codificado según JWK.
+
+        e:
+          type: string
+          description: Exponente RSA codificado según JWK.
+
+
+  responses:
+
+    PeticionInvalida:
+      description: La petición no cumple el esquema o contiene un valor inválido.
+
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+          example:
+            tipo: peticion-invalida
+            titulo: Petición inválida
+            estado: 400
+            detalle: La petición no cumple el esquema esperado.
+            correlacion_id: corr-123
+
+
+    SesionInvalida:
+      description: >
+        La sesión o credencial no pudo validarse. La respuesta no revela
+        si el fallo corresponde al usuario, la credencial, el token,
+        el secreto de renovación, el emisor o la audiencia.
+
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+          example:
+            tipo: sesion-invalida
+            titulo: Sesión inválida
+            estado: 401
+            detalle: No fue posible validar la sesión.
+            correlacion_id: corr-123
+
+
+    OperacionNoPermitida:
+      description: >
+        El sujeto autenticado no está autorizado para ejecutar
+        la operación.
+
+      headers:
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+          example:
+            tipo: operacion-no-permitida
+            titulo: Operación no permitida
+            estado: 403
+            detalle: La operación no está permitida para el sujeto autenticado.
+            correlacion_id: corr-123
+
+
+    DemasiadasPeticiones:
+      description: Se superó el límite de peticiones permitido.
+
+      headers:
+        Retry-After:
+          description: Tiempo mínimo antes de volver a intentar.
+          schema:
+            type: integer
+            minimum: 0
+
+        X-Correlacion-Id:
+          $ref: "#/components/headers/CorrelacionId"
+
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+          example:
+            tipo: demasiadas-peticiones
+            titulo: Demasiadas peticiones
+            estado: 429
+            detalle: Se superó el límite de peticiones permitido.
+            correlacion_id: corr-123
+
+
+    CuerpoDemasiadoGrande:
+      description: >
+        El cuerpo de la petición supera el límite de 1 MiB.
+        Esta respuesta es producida por el proxy de borde antes
+        de que la petición alcance el API Gateway o el Servicio
+        de Identidad.
