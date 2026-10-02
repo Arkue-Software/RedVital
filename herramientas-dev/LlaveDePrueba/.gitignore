@@ -1,0 +1,9 @@
+# La llave de prueba se genera localmente con "dotnet run -- generar-llave".
+# No se versiona: cada integrante la genera la primera vez que configura su
+# ambiente, siguiendo la misma convención de secretos que el resto del
+# proyecto (ningún secreto se versiona, aunque este en particular no sea
+# "secreto" en sentido estricto — se trata igual, por consistencia).
+llaves/
+
+bin/
+obj/
