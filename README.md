@@ -1,89 +1,45 @@
 # RedVital
 
-Plataforma para la gestion del ciclo de vida de la donacion de sangre en Colombia: registro de donantes, trazabilidad de unidades, inventario, campanas de donacion y coordinacion entre bancos de sangre por nivel territorial.
+RedVital es una plataforma para coordinar el ciclo de vida de la donacion de
+sangre, la trazabilidad de unidades, campañas y la operacion de bancos de sangre
+en Colombia.
 
-Proyecto academico desarrollado por Arkhe Software S.A.S. para el curso de Arquitectura de Software Empresarial, Pontificia Universidad Javeriana.
+Este repositorio centraliza los contratos OpenAPI, documentacion de entrada y
+configuracion compartida. El frontend y los servicios se mantienen en
+repositorios propios bajo la organizacion [Arkue-Software](https://github.com/Arkue-Software).
 
-## Que resuelve
+## Repositorios
 
-Colombia capta menos sangre de la que necesita cada ano, y el deficit se agrava de forma estacional. RedVital no interviene en el proceso clinico: coordina la informacion entre bancos de sangre, prioriza la redistribucion del inventario ya captado antes de convocar nuevos donantes, y da a las entidades territoriales visibilidad sobre los bancos de su jurisdiccion.
+| Componente | Repositorio |
+|---|---|
+| Frontend | [frontend](https://github.com/Arkue-Software/frontend) |
+| Servicio de Identidad | [identity-service](https://github.com/Arkue-Software/identity-service) |
+| Servicio de Campañas | [campaign-service](https://github.com/Arkue-Software/campaign-service) |
+| Servicio de Donación | [donation-service](https://github.com/Arkue-Software/donation-service) |
+| Servicio Institucional | [Institutional-network-service](https://github.com/Arkue-Software/Institutional-network-service) |
+| API Gateway | [api-gateway-apisix](https://github.com/Arkue-Software/api-gateway-apisix) |
+| Bases y migraciones | [databases](https://github.com/Arkue-Software/databases) |
+| Documentacion | [red-vital-documentacion](https://github.com/Arkue-Software/red-vital-documentacion) |
 
-## Stack
+## Persistencia
 
-| Capa | Tecnologia |
-| --- | --- |
-| Backend | Java 21, Spring Boot, Spring Data JPA, Spring Security, Spring Scheduler |
-| Frontend | TypeScript, React |
-| Base de datos | PostgreSQL 16 |
-| Migraciones | Flyway |
-| Entorno local | Docker Compose |
-| Integracion continua | GitHub Actions |
+Cada servicio con datos persistentes usa una instancia PostgreSQL independiente:
+Identidad (`db_identidad`), Institucional (`db_institucional`), Campañas
+(`db_campana`) y Donación (`db_donacion`). Las migraciones disponibles en esta
+integracion cubren Identidad y Campañas; las bases de Donación e Institucional
+se aprovisionan vacias, sin inventar tablas o roles pendientes de sus equipos.
+Notificaciones no requiere una base de negocio propia.
 
-La justificacion de cada eleccion esta en [ADR-001](docs/adr/ADR-001-seleccion-del-stack-tecnologico.md).
+El Compose canonico, los roles y las migraciones viven en el repositorio
+`databases`; no uses una base compartida para ejecutar los servicios.
 
-## Arquitectura
+## Contratos y documentacion
 
-El sistema es un **monolito modular**: una sola aplicacion desplegable, con limites internos estrictos entre modulos. Cada carpeta bajo `backend/src/main/java/co/edu/javeriana/redvital/` corresponde a un modulo funcional del SRS.
+Los contratos publicados estan en [`api/`](api/). Las decisiones
+arquitectonicas, requisitos, operacion y evidencia de pruebas se mantienen en
+el repositorio de documentacion enlazado arriba.
 
-Regla de dependencia: ningun modulo accede directamente a las tablas ni a las entidades de otro. La comunicacion entre modulos pasa por sus servicios publicos.
+## Desarrollo local
 
-El razonamiento detras de esta decision esta en [ADR-002](docs/adr/ADR-002-monolito-modular.md).
-
-## Estructura del repositorio
-
-```
-redvital/
-├── backend/            API Spring Boot, organizada por modulos
-├── frontend/           Aplicacion React
-├── docs/
-│   └── adr/            Registros de Decision Arquitectonica
-├── .github/            Workflows de CI y plantillas
-└── docker-compose.yml  Base de datos para desarrollo local
-```
-
-## Requisitos
-
-- Java 21
-- Node.js 20 o superior
-- Docker y Docker Compose
-
-## Puesta en marcha
-
-```bash
-# 1. Clonar y configurar variables de entorno
-git clone <url-del-repositorio>
-cd redvital
-cp .env.example .env
-
-# 2. Levantar la base de datos
-docker compose up -d db
-
-# 3. Backend
-cd backend
-./mvnw spring-boot:run
-
-# 4. Frontend, en otra terminal
-cd frontend
-npm install
-npm run dev
-```
-
-El backend queda en `http://localhost:8080` y el frontend en `http://localhost:5173`.
-
-## Como trabajamos
-
-Las reglas de ramas, commits, Pull Requests y revision estan en [CONTRIBUTING.md](CONTRIBUTING.md). Los criterios para dar una tarea por terminada estan en [DEFINITION_OF_DONE.md](DEFINITION_OF_DONE.md).
-
-El despliegue del ambiente de demostracion es automatico a partir de `main`, gestionado por el proveedor de alojamiento. No requiere un workflow adicional en este repositorio.
-
-## Equipo
-
-| Rol | Integrante |
-| --- | --- |
-| Product Owner | Alexander Aponte |
-| Scrum Master / Project Manager | Carlos Santiago Pinzon Caicedo |
-| Arquitecto de Software | |
-
-## Licencia
-
-[MIT](LICENSE).
+Consulta el README de cada servicio y ejecuta el Compose de
+`Arkue-Software/databases` para provisionar las bases aisladas.

@@ -1,32 +1,18 @@
 # Backend
 
-API de RedVital construida con Spring Boot.
+El backend de RedVital se mantiene en repositorios de servicios independientes;
+esta carpeta conserva solo la guia de entrada. No contiene un backend Spring
+Boot monolitico que deba ejecutarse desde este repositorio.
 
-## Organizacion por modulos
+| Servicio | Repositorio |
+|---|---|
+| Identidad | [identity-service](https://github.com/Arkue-Software/identity-service) |
+| Campañas | [campaign-service](https://github.com/Arkue-Software/campaign-service) |
+| Donación | [donation-service](https://github.com/Arkue-Software/donation-service) |
+| Institucional | [Institutional-network-service](https://github.com/Arkue-Software/Institutional-network-service) |
+| API Gateway | [api-gateway-apisix](https://github.com/Arkue-Software/api-gateway-apisix) |
+| Bases y migraciones | [databases](https://github.com/Arkue-Software/databases) |
 
-El backend es un monolito modular. Cada carpeta bajo
-`src/main/java/co/edu/javeriana/redvital/` corresponde a un modulo funcional
-del SRS y constituye un limite interno.
-
-| Carpeta | Modulo |
-| --- | --- |
-| `shared` | Codigo transversal: configuracion, seguridad, auditoria, excepciones |
-| `donantes` | M1 Gestion de Donantes |
-| `gamificacion` | M2 Motivacion y Gamificacion |
-| `campanas` | M3 Gestion de Campanas |
-| `trazabilidad` | M4 Trazabilidad y Ciclo de Vida |
-| `inventario` | M5 Inventario y Alertas |
-| `transferencias` | M6 Red de Transferencias |
-| `territorial` | M7 Administracion Territorial |
-| `analitica` | M8 Analitica e Indicadores |
-
-Regla de dependencia: un modulo no accede a las entidades ni a las tablas de
-otro modulo. La comunicacion entre modulos se hace a traves de sus servicios
-publicos. Las clases compartidas viven en `shared`.
-
-## Ejecutar en local
-
-```bash
-docker compose up -d db     # desde la raiz del repositorio
-./mvnw spring-boot:run
-```
+La base de datos local se levanta desde el repositorio `databases`. Cada servicio
+con persistencia tiene una instancia independiente; las bases de Donación e
+Institucional permanecen vacías hasta que sus equipos aprueben sus esquemas.
